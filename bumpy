@@ -1,0 +1,96 @@
+#!/usr/bin/sh
+
+from moviepy.editor import *
+import yaml, argparse, sys
+
+parser = argparse.ArgumentParser(usage='%(prog)s [-p] bump.yml [bump.mp4]',
+                                 description='Generate [adult swim]-style bumps from a YAML file.',
+                                 prog='bumpy',
+                                 epilog='Help for [bumpy] goes here!')
+parser.add_argument('-p', '--preview',
+                    action='store_true',
+                    help='render a bump preview')
+parser.add_argument('input',
+                    nargs=1,
+                    help='YAML file to parse')
+parser.add_argument('output',
+                    nargs='?',
+                    default='bump.mp4',
+                    help='optional: path to render the bump to, defaults to ./')
+args = parser.parse_args()
+
+deck = []
+
+# Load data from bumpy.yml
+print("[bumpy] Parsing...")
+# print(args.input)
+stream = yaml.safe_load(open(args.input[0], 'r'))
+
+# Get the captions
+caption_list = stream['bump']
+# print(caption_list)
+
+# Card iteration
+for i in caption_list:
+    # Check options
+    options = {}
+
+    if (caption_list.index(i) + 1) in stream['options']:
+        id = (caption_list.index(i) + 1)
+        options = stream['options'].get(id)
+
+    card_fontsize = options.get('size', 42)
+    card_color = options.get('color', 'white')
+    card_bg_color = options.get('bg_color', 'black')
+    card_align = options.get('align', 'center')
+    card_font = options.get('font', 'Helvetica-Neue-LT-Com-77-Bold-Condensed')
+
+    # Compose card
+    card = TextClip("<span font='HelveticaNeueCond'><b>{}</b></span>".format(i),
+                   font = card_font,
+                   fontsize = card_fontsize,
+                   size = (1280,720),
+                   color = card_color,
+                   bg_color = card_bg_color,
+                   align = card_align,
+                   density = 72,
+                   method = 'pango',
+                   print_cmd = True,
+                   )
+
+    card = card.set_duration(options.get('duration', 2)) # default value
+
+    # Add card to deck
+    deck.append(card)
+
+logo = TextClip("[ pellettiero ]",
+                font='Helvetica-Neue-LT-Com-77-Bold-Condensed',
+                fontsize=24,
+                size=(1280,720),
+                color="white",
+                bg_color='black',
+                align='center',
+                density=72,
+                # method='caption',
+                # print_cmd=True,
+                )
+# Set duration here
+logo = logo.set_duration(1)
+
+# Add final logo to deck
+deck.append(logo)
+# print(deck)
+
+# Concatenate cards
+final_bump = concatenate_videoclips(deck)
+
+# Set audio for the bump
+audio = AudioFileClip(stream['audio'].get('file')).subclip(stream['audio'].get('subclip')).set_duration(final_bump.duration)
+final_bump = final_bump.set_audio(audio)
+
+# Render final bump
+if args.preview:
+    print("[bumpy] Rendering preview...")
+    final_bump.write_videofile(args.output, fps=15, audio=False, preset='ultrafast', threads=4)
+else:
+    final_bump.write_videofile(args.output, codec='mpeg4', audio_codec='aac', fps=30, threads=4)
